@@ -21,6 +21,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.yaml:snakeyaml:1.29'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.projectlombok:lombok'

@@ -70,10 +70,11 @@ public class FolderBillDataSource implements BillDataSource {
 
     private BillItem setBillCls(BillItem bill, Map<String, List<String>> classes) {
         var billName = bill.getName();
-        for (var cls : classes.keySet()) {
-            var items = classes.get(cls);
+        for (var entry : classes.entrySet()) {
+            var clsName = entry.getKey();
+            var items = entry.getValue();
             if (items.contains(billName)) {
-                bill.setCls(cls);
+                bill.setCls(clsName);
                 break;
             }
         }
@@ -92,7 +93,7 @@ public class FolderBillDataSource implements BillDataSource {
                 .skip(1)
                 .map(String::strip)
                 .map(str -> this.tmpYear + " " + this.tmpMonth + " " + day + " " + str)
-                .map(BillItem::fromString);
+                .map(BillItemKt::fromString);
     }
 
     /**
@@ -101,6 +102,5 @@ public class FolderBillDataSource implements BillDataSource {
     private Stream<String> fileStringToBillBlock(String txt) {
         return Arrays.stream(txt.strip().split("\r\n\r\n"))
                 .map(String::strip);
-
     }
 }

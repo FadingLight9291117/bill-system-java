@@ -3,8 +3,6 @@ package com.fadinglight.billsystem.data;
 
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;

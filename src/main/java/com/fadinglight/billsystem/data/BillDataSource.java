@@ -1,7 +1,5 @@
 package com.fadinglight.billsystem.data;
 
-import com.fadinglight.billsystem.data.BillItem;
-
 import java.io.IOException;
 import java.util.List;
 

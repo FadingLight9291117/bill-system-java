@@ -97,10 +97,29 @@ public class FolderBillDataSource implements BillDataSource {
     }
 
     /**
+     * 处理单个账单item
+     * 比如 `晚餐 12`或者`晚餐12`或者`晚餐`
+     * 1. 正常
+     * 2. name和money连在一起
+     * 3. 没有money
+     * 以上2,3转换为1，无money处理为money=0
+     */
+    private String resolveItemString(String item) {
+        // 1
+        if (item.split("//s+").length == 2) {
+            return item;
+        }
+        // 2
+        // 正则表达式
+        return null;
+    }
+
+    /**
      * 把一整个文件的字符串转变为 每天的bill字符串块
      */
     private Stream<String> fileStringToBillBlock(String txt) {
-        return Arrays.stream(txt.strip().split("\r\n\r\n"))
+        return Stream.of(txt.strip().split("\r\n"))
+                .filter(s -> !s.isBlank())
                 .map(String::strip);
     }
 }

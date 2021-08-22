@@ -20,14 +20,6 @@ public class FolderBillDataSource implements BillDataSource {
     private final String billDirPath;
     private final List<Path> files;
     private final Map<String, Object> configMap;
-    private int tmpYear;
-    private int tmpMonth;
-
-    private static Map<String, Object> parseYamlFile(String filepath) {
-        var yaml = new Yaml();
-        var inputStream = FolderBillDataSource.class.getClassLoader().getResourceAsStream(filepath);
-        return yaml.load(inputStream);
-    }
 
 
     public FolderBillDataSource(String configFile) throws IOException {
@@ -41,31 +33,45 @@ public class FolderBillDataSource implements BillDataSource {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public List<BillItem> searchBill(int year, int month) throws IOException {
-        this.tmpYear = year;
-        this.tmpMonth = month;
-        Path filepath = null;
-        for (var p : files) {
-            var pNames = p.getFileName().toString().split("\\.");
-            var pYear = Integer.parseInt(pNames[0]);
-            var pMonth = Integer.parseInt(pNames[1]);
-            if (pYear == year && pMonth == month) {
-                filepath = p;
-            }
-        }
-        if (filepath == null) {
-            return Collections.emptyList();
-        }
 
-        Map<String, List<String>> classes = (Map<String, List<String>>) this.configMap.get("classes");
+    private Map<String, List<String>> getCls() {
+        return (Map<String, List<String>>) this.configMap.get("classes");
+    }
 
-        var content = Files.readString(filepath);
-        return fileStringToBillBlock(content)
-                .flatMap(this::billBlockToBillItems)
-                .map(billItem -> this.setBillCls(billItem, classes))
+
+    private List<BillItem> searchBill(Path path) throws IOException {
+        final var filename = path.getFileName().toString();
+        final var names = filename.split("\\.");
+        final var year = names[0];
+        final var month = names[1];
+
+        return fileStringToBillBlock(Files.readString(path))
+                .flatMap(block -> billBlockToBillItems(block, year, month))
+                .map(billItem -> this.setBillCls(billItem, this.getCls()))
                 .parallel()
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<BillItem> searchBill(int year) throws IOException {
+        final var needPath = new ArrayList<Path>();
+        for (var p : this.files) {
+
+        }
+    }
+
+    @Override
+    public List<BillItem> searchBill(int year, int month) throws IOException {
+        var filePath = Paths.get(this.billDirPath + year + "." + month + ".txt");
+        if (!this.files.contains(filePath)) {
+            return Collections.emptyList();
+        }
+        return this.searchBill(filePath);
+    }
+
+    @Override
+    public List<BillItem> searchBill(int year, int month, int day) throws IOException {
+        return null;
     }
 
     private BillItem setBillCls(BillItem bill, Map<String, List<String>> classes) {
@@ -85,41 +91,28 @@ public class FolderBillDataSource implements BillDataSource {
     /**
      * 把每日的bill字符串块转化为BillItem对象列表
      */
-    private Stream<BillItem> billBlockToBillItems(String block) {
+    private Stream<BillItem> billBlockToBillItems(String block, String year, String month) {
         var lines = block.split("\r\n");
         var date = lines[0].strip().split("\\.");
         var day = date[date.length - 1];
         return Stream.of(lines)
                 .skip(1)
                 .map(String::strip)
-                .map(str -> this.tmpYear + " " + this.tmpMonth + " " + day + " " + str)
+                .map(str -> year + " " + month + " " + day + " " + str)
                 .map(BillItemKt::fromString);
-    }
-
-    /**
-     * 处理单个账单item
-     * 比如 `晚餐 12`或者`晚餐12`或者`晚餐`
-     * 1. 正常
-     * 2. name和money连在一起
-     * 3. 没有money
-     * 以上2,3转换为1，无money处理为money=0
-     */
-    private String resolveItemString(String item) {
-        // 1
-        if (item.split("//s+").length == 2) {
-            return item;
-        }
-        // 2
-        // 正则表达式
-        return null;
     }
 
     /**
      * 把一整个文件的字符串转变为 每天的bill字符串块
      */
     private Stream<String> fileStringToBillBlock(String txt) {
-        return Stream.of(txt.strip().split("\r\n"))
-                .filter(s -> !s.isBlank())
+        return Arrays.stream(txt.strip().split("\r\n\r\n"))
                 .map(String::strip);
+    }
+
+    private static Map<String, Object> parseYamlFile(String filepath) {
+        var yaml = new Yaml();
+        var inputStream = FolderBillDataSource.class.getClassLoader().getResourceAsStream(filepath);
+        return yaml.load(inputStream);
     }
 }

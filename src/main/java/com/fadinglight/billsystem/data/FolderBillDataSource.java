@@ -1,6 +1,7 @@
 package com.fadinglight.billsystem.data;
 
 
+import com.fasterxml.jackson.databind.deser.DataFormatReaders;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.yaml.snakeyaml.Yaml;
@@ -10,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -26,7 +29,6 @@ public class FolderBillDataSource implements BillDataSource {
         this.configMap = parseYamlFile(configFile);
 
         this.billDirPath = (String) this.configMap.get("billPath");
-
         this.files = Files.list(Paths.get(this.billDirPath))
                 .parallel()
                 .filter(p -> p.toString().endsWith(".txt"))
@@ -48,7 +50,6 @@ public class FolderBillDataSource implements BillDataSource {
         return fileStringToBillBlock(Files.readString(path))
                 .flatMap(block -> billBlockToBillItems(block, year, month))
                 .map(billItem -> this.setBillCls(billItem, this.getCls()))
-                .parallel()
                 .collect(Collectors.toList());
     }
 
@@ -56,13 +57,22 @@ public class FolderBillDataSource implements BillDataSource {
     public List<BillItem> searchBill(int year) throws IOException {
         final var needPath = new ArrayList<Path>();
         for (var p : this.files) {
-
+            var name = p.getFileName();
+            var nYear = Integer.parseInt(name.toString().split("\\.")[0]);
+            if (nYear == year) {
+                needPath.add(p);
+            }
         }
+        final var res = new ArrayList<BillItem>(needPath.size());
+        for (var path : needPath) {
+            res.addAll(this.searchBill(path));
+        }
+        return res;
     }
 
     @Override
     public List<BillItem> searchBill(int year, int month) throws IOException {
-        var filePath = Paths.get(this.billDirPath + year + "." + month + ".txt");
+        var filePath = Paths.get(this.billDirPath, year + "." + month + ".txt");
         if (!this.files.contains(filePath)) {
             return Collections.emptyList();
         }
@@ -71,7 +81,15 @@ public class FolderBillDataSource implements BillDataSource {
 
     @Override
     public List<BillItem> searchBill(int year, int month, int day) throws IOException {
-        return null;
+        return searchBill(year, month)
+                .parallelStream()
+                .filter(item -> item.getDate().getDayOfMonth() == day)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Map<String, List<String>> getAllCls() {
+        return this.getCls();
     }
 
     private BillItem setBillCls(BillItem bill, Map<String, List<String>> classes) {
@@ -84,9 +102,33 @@ public class FolderBillDataSource implements BillDataSource {
                 break;
             }
         }
+        if (bill.getCls() == null) {
+            bill.setCls("其他");
+        }
         return bill;
     }
 
+    /*
+     * 处理3种情况的字符串
+     * 1. 早餐 12 -> 正常
+     * 2. 早餐12  -> 这种是名字和金额连在一起
+     * 3. 早餐    -> 这种是没有金额
+     * */
+    private String dealExceptItemString(String str) {
+        String name;
+        String money;
+        String p = "(\\D+)(\\d+\\.*\\d*)";
+        Pattern r = Pattern.compile(p);
+        Matcher m = r.matcher(str);
+        if (m.find()) {
+            name = m.group(1);
+            money = m.group(2);
+        } else {
+            name = str.strip();
+            money = "0";
+        }
+        return name + " " + money;
+    }
 
     /**
      * 把每日的bill字符串块转化为BillItem对象列表
@@ -97,9 +139,9 @@ public class FolderBillDataSource implements BillDataSource {
         var day = date[date.length - 1];
         return Stream.of(lines)
                 .skip(1)
-                .map(String::strip)
+                .map(this::dealExceptItemString)
                 .map(str -> year + " " + month + " " + day + " " + str)
-                .map(BillItemKt::fromString);
+                .map(BillItem::fromString);
     }
 
     /**
